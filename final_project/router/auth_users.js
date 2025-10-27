@@ -48,20 +48,83 @@ reg_users.post("/login", async (req,res) => {
   }
 });
 
-// Add a book review
-reg_users.put("/auth/review/:isbn", (req, res) => {
-  const isbn = req.params.isbn;
-  const review = req.body.review;
 
-  if (isbn && review) {
-    if (books[isbn]) {
-      books[isbn].reviews.push(review);
-      return res.status(200).json({message: "Review successfully added."});
-    } else {
-      return res.status(404).json({message: "Book not found!"});
-    }
+
+
+reg_users.put("/auth/review/:isbn", (req, res) => {
+  console.log("PUT /auth/review/:isbn called");
+  const isbn = req.params.isbn;
+  const { review } = req.body;
+  console.log("ISBN:", isbn, "Review:", review);
+
+  if (!review) return res.status(400).json({ message: "Review text is required" });
+
+  const token = req.headers.authorization?.split(' ')[1];
+  console.log("Token:", token);
+  if (!token) return res.status(401).json({ message: "Authentication token is required" });
+
+  try {
+    const decoded = jwt.verify(token, "secretKey");
+    console.log("Decoded:", decoded);
+    const username = decoded.username;
+
+    const book = books[isbn];
+    console.log("Book:", book);
+    if (!book) return res.status(404).json({ message: "Book not found" });
+
+    if (!book.reviews) book.reviews = {};
+    book.reviews[username] = review;
+
+    console.log("Review added:", book.reviews);
+
+    res.status(200).json({
+      message: "Review added/updated successfully",
+      review: { username, review, isbn }
+    });
+
+  } catch (error) {
+    console.error("Review error:", error);
+    if (error.name === 'JsonWebTokenError') return res.status(401).json({ message: "Invalid token" });
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
+
+//Complete the code for deleting a book review under regd_users.delete("/auth/review/:isbn", (req, res) => {
+// Hint: Filter & delete the reviews based on the session username, so that a user can delete only his/her reviews and not other users’.
+
+reg_users.delete("/auth/review/:isbn",  (req, res) => {
+  const isbn = req.params.isbn;
+  const token = req.headers.authorization?.split(' ')[1];
+  console.log("Token:", token);
+  if (!token) return res.status(401).json({ message: "Authentication token is required" });
+
+  try {
+    const decoded = jwt.verify(token, "secretKey");
+    console.log("Decoded:", decoded);
+    const username = decoded.username;
+
+    const book = books[isbn];
+    console.log("Book:", book);
+    if (!book) return res.status(404).json({ message: "Book not found" });
+
+    if (!book.reviews) book.reviews = {};
+    delete book.reviews[username];
+
+    console.log("Review deleted:", book.reviews);
+
+    res.status(200).json({
+      message: "Review deleted successfully",
+      isbn
+    });
+
+  } catch (error) {
+    console.error("Review error:", error);
+    if (error.name === 'JsonWebTokenError') return res.status(401).json({ message: "Invalid token" });
+    return res.status(500).json({ message: "Internal server error" });
+  }
+})
+
+
 
 module.exports.authenticated = reg_users;
 module.exports.isValid = isValid;
